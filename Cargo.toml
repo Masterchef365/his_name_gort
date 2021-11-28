@@ -1,0 +1,7 @@
+[package]
+name = "his_name_gort"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+idek = { git = "https://github.com/Masterchef365/idek.git", branch = "master" }
