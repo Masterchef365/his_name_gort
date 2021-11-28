@@ -6,7 +6,7 @@ fn main() -> Result<()> {
     launch::<TriangleApp>(Settings::default().vr_if_any_args())
 }
 
-const DIMS: usize = 3;
+const DIMS: usize = 5;
 
 struct TriangleApp {
     original_verts: Vec<Vector<DIMS>>,
@@ -27,7 +27,7 @@ impl App for TriangleApp {
         let original_verts = n_cube_vertices(1.).collect::<Vec<Vector<DIMS>>>();
         let indices = n_cube_line_indices(DIMS as _).collect::<Vec<u32>>();
 
-        let verts = convert_verts(&original_verts, [1.; 3], 0.);
+        let verts = convert_verts(&original_verts, 0.);
 
         Ok(Self {
             verts: ctx.vertices(&verts, true)?,
@@ -42,7 +42,7 @@ impl App for TriangleApp {
         let time = ctx.start_time().elapsed().as_secs_f32();
         let anim = time;
 
-        let new_verts: Vec<Vertex> = convert_verts(&self.original_verts, [1.; 3], anim);
+        let new_verts: Vec<Vertex> = convert_verts(&self.original_verts, anim);
 
         ctx.update_vertices(self.verts, &new_verts)?;
 
@@ -65,32 +65,23 @@ impl App for TriangleApp {
     }
 }
 
-fn convert_verts<const D: usize>(original: &[Vector<D>], color: [f32; 3], anim: f32) -> Vec<Vertex> {
-    let axis = (0, 2);
+fn convert_verts<const D: usize>(original: &[Vector<D>], anim: f32) -> Vec<Vertex> {
     let color = [1.; 3];
     original
         .iter()
         .copied()
-        .map(|v| n_rotate(axis, anim, v))
+        .map(|v| n_rotate((0, 3), anim / 4., v))
+        .map(|v| n_rotate((2, 4), anim / 4., v))
+        .map(|v| n_rotate((1, 4), anim / 3., v))
+        .map(|v| n_rotate((3, 4), anim, v))
         .map(|pos| project(pos, 1.))
         .map(|pos| Vertex { pos, color })
         .collect()
 }
 
 fn project<const D: usize>(v: Vector<D>, focal: f32) -> [f32; 3] {
-    //let div = v[3..].iter().map(|f| f * f).sum::<f32>().sqrt();
-    let div = 1.;
+    let div = v[3..].iter().map(|f| f * f).sum::<f32>().sqrt();
     [v[0], v[1], v[2]].map(|x| focal * x / div)
-}
-
-fn line_cube(scale: f32, color: [f32; 3]) -> (Vec<Vertex>, Vec<u32>) {
-    let vertices = n_cube_vertices::<3>(scale)
-        .map(|pos| Vertex { pos, color })
-        .collect();
-
-    let indices = n_cube_line_indices(3).collect();
-
-    (vertices, indices)
 }
 
 fn collect_array<T, const N: usize>(i: impl Iterator<Item = T>) -> [T; N]
