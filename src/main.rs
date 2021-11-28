@@ -6,7 +6,7 @@ fn main() -> Result<()> {
     launch::<TriangleApp>(Settings::default().vr_if_any_args())
 }
 
-const DIMS: usize = 5;
+const DIMS: usize = 4;
 
 struct TriangleApp {
     original_verts: Vec<Vector<DIMS>>,
@@ -40,7 +40,7 @@ impl App for TriangleApp {
 
     fn frame(&mut self, ctx: &mut Context, _: &mut Platform) -> Result<Vec<DrawCmd>> {
         let time = ctx.start_time().elapsed().as_secs_f32();
-        let anim = time;
+        let anim = time / 10.;
 
         let new_verts: Vec<Vertex> = convert_verts(&self.original_verts, anim);
 
@@ -70,18 +70,24 @@ fn convert_verts<const D: usize>(original: &[Vector<D>], anim: f32) -> Vec<Verte
     original
         .iter()
         .copied()
-        .map(|v| n_rotate((0, 3), anim / 4., v))
-        .map(|v| n_rotate((2, 4), anim / 4., v))
-        .map(|v| n_rotate((1, 4), anim / 3., v))
-        .map(|v| n_rotate((3, 4), anim, v))
-        .map(|pos| project(pos, 1.))
+        .map(|v| n_rotate((0, 1), 0.3, v))
+        .map(|v| n_rotate((1, 3), 2.5, v))
+        .map(|v| n_rotate((1, 2), anim, v))
+        .map(|pos| project(pos, (1., 2., 0.3)))
         .map(|pos| Vertex { pos, color })
         .collect()
 }
 
-fn project<const D: usize>(v: Vector<D>, focal: f32) -> [f32; 3] {
-    let div = v[3..].iter().map(|f| f * f).sum::<f32>().sqrt();
-    [v[0], v[1], v[2]].map(|x| focal * x / div)
+// https://www.heldermann-verlag.de/jgg/jgg01_05/jgg0404.pdf
+fn project<const D: usize>(q: Vector<D>, (t, u, v): (f32, f32, f32)) -> [f32; 3] {
+    [
+        q[0] * -t.sin() + q[1] * t.cos(),
+        q[0] * -t.cos() * u.sin() + q[1] * -t.sin() * u.sin() + q[2] * u.cos(),
+        q[0] * -t.cos() * u.cos() * v.sin() + 
+            q[1] * -t.sin() * u.cos() * v.sin() +
+            q[2] * -u.sin() * v.sin() +
+            q[3] * v.cos()
+    ]
 }
 
 fn collect_array<T, const N: usize>(i: impl Iterator<Item = T>) -> [T; N]
