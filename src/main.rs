@@ -47,12 +47,9 @@ impl App for TriangleApp {
     }
 }
 
-fn line_cube(scale: f32, color: [f32; 3]) -> (Vec<Vertex>, Vec<u32>) {
-    let vertices = n_cube_vertices(scale, color, 3)
-        .map(|vert| Vertex {
-            pos: [vert.pos[0], vert.pos[1], vert.pos[2]],
-            color: vert.color,
-        })
+fn line_cube(scale: f32, color: [f32; 3]) -> (Vec<Vector>, Vec<u32>) {
+    let vertices = n_cube_vertices::<3>(scale)
+        .map(|pos| Vector { pos, color })
         .collect();
 
     let indices = n_cube_line_indices(3).collect();
@@ -60,16 +57,24 @@ fn line_cube(scale: f32, color: [f32; 3]) -> (Vec<Vertex>, Vec<u32>) {
     (vertices, indices)
 }
 
-struct VertexN {
-    pos: Vec<f32>,
-    color: [f32; 3], // TODO: Multidimensional color??
+fn collect_array<T, const N: usize>(i: impl Iterator<Item = T>) -> [T; N]
+where
+    T: Default + Copy,
+{
+    let mut array = [T::default(); N];
+    let n_filled = array.iter_mut().zip(i).map(|(arr, i)| *arr = i).count();
+    assert_eq!(n_filled, N, "Iterator could not fill array");
+    array
 }
 
-fn n_cube_vertices(scale: f32, color: [f32; 3], rank: u32) -> impl Iterator<Item = VertexN> {
+type Vector<const D: usize> = [f32; D];
+
+fn n_cube_vertices<const D: usize>(
+    scale: f32,
+) -> impl Iterator<Item = Vector<D>> {
+    let rank = D as u32;
     let f = move |i: u32, dim: u32| if i & 1 << dim == 0 { scale } else { -scale };
-    (0..1u32 << rank)
-        .map(move |i| (0..rank).map(|dim| f(i, dim)).collect::<Vec<f32>>())
-        .map(move |pos| VertexN { pos, color })
+    (0..1u32 << rank).map(move |i| collect_array((0..rank).map(|dim| f(i, dim))))
 }
 
 fn n_cube_line_indices(rank: u32) -> impl Iterator<Item = u32> {
@@ -84,4 +89,11 @@ fn n_cube_line_indices(rank: u32) -> impl Iterator<Item = u32> {
         })
         .flatten()
         .flatten()
+}
+
+fn n_rotate<const D: usize>(axis: (usize, usize), angle: f32, mut v: Vector<D>) -> Vector<D> {
+    let (a, b) = axis;
+    v[a] = v[a] * angle.cos() - v[b] * angle.sin();
+    v[b] = v[a] * angle.sin() + v[b] * angle.cos();
+    v
 }
