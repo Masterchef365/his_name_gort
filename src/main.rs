@@ -9,7 +9,7 @@ fn main() -> Result<()> {
 const DIMS: usize = 3;
 
 struct TriangleApp {
-    original_verts: Vec<Vertex>,
+    original_verts: Vec<Vector<DIMS>>,
     verts: VertexBuffer,
     indices: IndexBuffer,
     shader: Shader,
@@ -24,10 +24,13 @@ impl App for TriangleApp {
             Primitive::Lines,
         )?;
 
-        let (original_verts, indices) = line_cube(1., [1.; 3]);
+        let original_verts = n_cube_vertices(1.).collect::<Vec<Vector<DIMS>>>();
+        let indices = n_cube_line_indices(DIMS as _).collect::<Vec<u32>>();
+
+        let verts = convert_verts(&original_verts, [1.; 3], 0.);
 
         Ok(Self {
-            verts: ctx.vertices(&original_verts, true)?,
+            verts: ctx.vertices(&verts, true)?,
             indices: ctx.indices(&indices, false)?,
             original_verts,
             shader,
@@ -36,12 +39,10 @@ impl App for TriangleApp {
     }
 
     fn frame(&mut self, ctx: &mut Context, _: &mut Platform) -> Result<Vec<DrawCmd>> {
-        let mut new_verts = self.original_verts.clone();
         let time = ctx.start_time().elapsed().as_secs_f32();
         let anim = time;
-        let axis = (0, 2);
 
-        new_verts.iter_mut().for_each(|v| v.pos = n_rotate(axis, anim, v.pos));
+        let new_verts: Vec<Vertex> = convert_verts(&self.original_verts, [1.; 3], anim);
 
         ctx.update_vertices(self.verts, &new_verts)?;
 
@@ -64,7 +65,23 @@ impl App for TriangleApp {
     }
 }
 
-//fn project<const D: 
+fn convert_verts<const D: usize>(original: &[Vector<D>], color: [f32; 3], anim: f32) -> Vec<Vertex> {
+    let axis = (0, 2);
+    let color = [1.; 3];
+    original
+        .iter()
+        .copied()
+        .map(|v| n_rotate(axis, anim, v))
+        .map(|pos| project(pos, 1.))
+        .map(|pos| Vertex { pos, color })
+        .collect()
+}
+
+fn project<const D: usize>(v: Vector<D>, focal: f32) -> [f32; 3] {
+    //let div = v[3..].iter().map(|f| f * f).sum::<f32>().sqrt();
+    let div = 1.;
+    [v[0], v[1], v[2]].map(|x| focal * x / div)
+}
 
 fn line_cube(scale: f32, color: [f32; 3]) -> (Vec<Vertex>, Vec<u32>) {
     let vertices = n_cube_vertices::<3>(scale)
