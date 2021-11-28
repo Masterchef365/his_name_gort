@@ -1,10 +1,15 @@
+use std::os::windows::prelude::MetadataExt;
+
 use idek::{prelude::*, IndexBuffer, MultiPlatformCamera};
 
 fn main() -> Result<()> {
     launch::<TriangleApp>(Settings::default().vr_if_any_args())
 }
 
+const DIMS: usize = 3;
+
 struct TriangleApp {
+    original_verts: Vec<Vertex>,
     verts: VertexBuffer,
     indices: IndexBuffer,
     shader: Shader,
@@ -18,16 +23,28 @@ impl App for TriangleApp {
             DEFAULT_FRAGMENT_SHADER,
             Primitive::Lines,
         )?;
-        let (vertices, indices) = line_cube(1., [1.; 3]);
+
+        let (original_verts, indices) = line_cube(1., [1.; 3]);
+
         Ok(Self {
-            verts: ctx.vertices(&vertices, false)?,
+            verts: ctx.vertices(&original_verts, true)?,
             indices: ctx.indices(&indices, false)?,
+            original_verts,
             shader,
             camera: MultiPlatformCamera::new(platform),
         })
     }
 
-    fn frame(&mut self, _ctx: &mut Context, _: &mut Platform) -> Result<Vec<DrawCmd>> {
+    fn frame(&mut self, ctx: &mut Context, _: &mut Platform) -> Result<Vec<DrawCmd>> {
+        let mut new_verts = self.original_verts.clone();
+        let time = ctx.start_time().elapsed().as_secs_f32();
+        let anim = time;
+        let axis = (0, 2);
+
+        new_verts.iter_mut().for_each(|v| v.pos = n_rotate(axis, anim, v.pos));
+
+        ctx.update_vertices(self.verts, &new_verts)?;
+
         Ok(vec![DrawCmd::new(self.verts)
             .indices(self.indices)
             .shader(self.shader)])
@@ -47,9 +64,11 @@ impl App for TriangleApp {
     }
 }
 
-fn line_cube(scale: f32, color: [f32; 3]) -> (Vec<Vector>, Vec<u32>) {
+//fn project<const D: 
+
+fn line_cube(scale: f32, color: [f32; 3]) -> (Vec<Vertex>, Vec<u32>) {
     let vertices = n_cube_vertices::<3>(scale)
-        .map(|pos| Vector { pos, color })
+        .map(|pos| Vertex { pos, color })
         .collect();
 
     let indices = n_cube_line_indices(3).collect();
@@ -93,7 +112,9 @@ fn n_cube_line_indices(rank: u32) -> impl Iterator<Item = u32> {
 
 fn n_rotate<const D: usize>(axis: (usize, usize), angle: f32, mut v: Vector<D>) -> Vector<D> {
     let (a, b) = axis;
-    v[a] = v[a] * angle.cos() - v[b] * angle.sin();
-    v[b] = v[a] * angle.sin() + v[b] * angle.cos();
+    let (va, vb) = (v[a], v[b]);
+    v[a] = va * angle.cos() - vb * angle.sin();
+    v[b] = va * angle.sin() + vb * angle.cos();
     v
 }
+
