@@ -3,20 +3,60 @@ use std::os::windows::prelude::MetadataExt;
 use idek::{prelude::*, IndexBuffer, MultiPlatformCamera};
 
 fn main() -> Result<()> {
-    launch::<TriangleApp>(Settings::default().vr_if_any_args())
+    launch::<HisNameGort>(Settings::default().vr_if_any_args())
 }
+
+type DynSparseMatrix = Vec<Vec<f32>>;
+
+/// Given coefficients for each dimension, project onto the dimension `proj`
+// https://www.heldermann-verlag.de/jgg/jgg01_05/jgg0404.pdf but I've modified it in ways I don't really understand
+fn make_projection(coeffs: &[f32], proj: usize) -> DynSparseMatrix {
+    let dims = coeffs.len();
+    let mut rows = vec![];
+    for row in dims - proj..dims {
+        let mut row_data = vec![];
+        for col in 0..row + 1 {
+            let mut entry = 1.;
+            for (dim, &coeff) in (0..row).zip(coeffs) {
+                if col > dim + 1 { 
+                    continue;
+                }
+                entry *= &match (col <= dim, row == dim + 1) {
+                    (true, true) => -coeff.sin(),
+                    (false, false) => coeff.sin(),
+                    _ => coeff.cos(),
+                };
+            }
+            row_data.push(entry);
+        }
+        rows.push(row_data);
+    }
+    rows
+}
+
+fn project<const D: usize>(v: Vector<D>, matrix: &DynSparseMatrix) -> Vector<3> {
+    let mut out_vect3 = [0.0; 3];
+
+    for (out, mat) in out_vect3.iter_mut().zip(matrix) {
+        *out = mat.iter().zip(&v).map(|(m, v)| m * v).sum::<f32>();
+    }
+
+    out_vect3
+}
+
 
 const DIMS: usize = 4;
 
-struct TriangleApp {
+struct HisNameGort {
     original_verts: Vec<Vector<DIMS>>,
     verts: VertexBuffer,
     indices: IndexBuffer,
     shader: Shader,
     camera: MultiPlatformCamera,
+    matrix: DynSparseMatrix,
 }
 
-impl App for TriangleApp {
+impl App for HisNameGort {
     fn init(ctx: &mut Context, platform: &mut Platform) -> Result<Self> {
         let shader = ctx.shader(
             DEFAULT_VERTEX_SHADER,
@@ -27,7 +67,8 @@ impl App for TriangleApp {
         let original_verts = n_cube_vertices(1.).collect::<Vec<Vector<DIMS>>>();
         let indices = n_cube_line_indices(DIMS as _).collect::<Vec<u32>>();
 
-        let verts = convert_verts(&original_verts, 0.);
+        let matrix = make_projection(&[0.3, 1.4, 2.3, 9.0], 3);
+        let verts = convert_verts(&original_verts, 0., &matrix);
 
         Ok(Self {
             verts: ctx.vertices(&verts, true)?,
@@ -35,6 +76,7 @@ impl App for TriangleApp {
             original_verts,
             shader,
             camera: MultiPlatformCamera::new(platform),
+            matrix,
         })
     }
 
@@ -42,7 +84,7 @@ impl App for TriangleApp {
         let time = ctx.start_time().elapsed().as_secs_f32();
         let anim = time / 10.;
 
-        let new_verts: Vec<Vertex> = convert_verts(&self.original_verts, anim);
+        let new_verts: Vec<Vertex> = convert_verts(&self.original_verts, anim, &self.matrix);
 
         ctx.update_vertices(self.verts, &new_verts)?;
 
@@ -65,7 +107,7 @@ impl App for TriangleApp {
     }
 }
 
-fn convert_verts<const D: usize>(original: &[Vector<D>], anim: f32) -> Vec<Vertex> {
+fn convert_verts<const D: usize>(original: &[Vector<D>], anim: f32, matrix: &DynSparseMatrix) -> Vec<Vertex> {
     let color = [1.; 3];
     original
         .iter()
@@ -73,21 +115,9 @@ fn convert_verts<const D: usize>(original: &[Vector<D>], anim: f32) -> Vec<Verte
         .map(|v| n_rotate((0, 1), 0.3, v))
         .map(|v| n_rotate((1, 3), 2.5, v))
         .map(|v| n_rotate((1, 2), anim, v))
-        .map(|pos| project(pos, (1., 2., 0.3)))
+        .map(|pos| project(pos, matrix))
         .map(|pos| Vertex { pos, color })
         .collect()
-}
-
-// https://www.heldermann-verlag.de/jgg/jgg01_05/jgg0404.pdf
-fn project<const D: usize>(q: Vector<D>, (t, u, v): (f32, f32, f32)) -> [f32; 3] {
-    [
-        q[0] * -t.sin() + q[1] * t.cos(),
-        q[0] * -t.cos() * u.sin() + q[1] * -t.sin() * u.sin() + q[2] * u.cos(),
-        q[0] * -t.cos() * u.cos() * v.sin() + 
-            q[1] * -t.sin() * u.cos() * v.sin() +
-            q[2] * -u.sin() * v.sin() +
-            q[3] * v.cos()
-    ]
 }
 
 fn collect_array<T, const N: usize>(i: impl Iterator<Item = T>) -> [T; N]
