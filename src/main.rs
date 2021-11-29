@@ -45,7 +45,7 @@ fn project<const D: usize>(v: Vector<D>, matrix: &DynSparseMatrix) -> Vector<3> 
 }
 
 
-const DIMS: usize = 4;
+const DIMS: usize = 8;
 
 struct HisNameGort {
     original_verts: Vec<Vector<DIMS>>,
@@ -67,7 +67,8 @@ impl App for HisNameGort {
         let original_verts = n_cube_vertices(1.).collect::<Vec<Vector<DIMS>>>();
         let indices = n_cube_line_indices(DIMS as _).collect::<Vec<u32>>();
 
-        let matrix = make_projection(&[0.3, 1.4, 2.3, 9.0], 3);
+        //let matrix = make_projection(&[0.3, 1.4, 2.3, 9.0, 1.4, 3.2], 3);
+        let matrix = make_projection(&[1.; DIMS], 3);
         let verts = convert_verts(&original_verts, 0., &matrix);
 
         Ok(Self {
@@ -112,9 +113,12 @@ fn convert_verts<const D: usize>(original: &[Vector<D>], anim: f32, matrix: &Dyn
     original
         .iter()
         .copied()
-        .map(|v| n_rotate((0, 1), 0.3, v))
-        .map(|v| n_rotate((1, 3), 2.5, v))
-        .map(|v| n_rotate((1, 2), anim, v))
+        //.map(|v| n_rotate((0, 1), anim, v))
+        .map(|v| n_rotate((3, 1), anim * 2., v))
+        .map(|v| n_rotate((4, 2), anim * 3., v))
+        .map(|v| n_rotate((6, 3), anim * 2.5, v))
+        //.map(|v| n_rotate((1, 3), 2.5, v))
+        //.map(|v| n_rotate((1, 2), anim / 3., v))
         .map(|pos| project(pos, matrix))
         .map(|pos| Vertex { pos, color })
         .collect()
