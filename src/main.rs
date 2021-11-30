@@ -50,10 +50,10 @@ fn project_nd<const D: usize>(v: Vector<D>, matrix: &DynSparseMatrix) -> Vector<
     out_vect3
 }
 
-const DIMS: usize = 6;
+const DIMS: usize = 7;
 
 struct HisNameGort {
-    original_verts: Vec<Vector<DIMS>>,
+    original_verts: Vec<VertexN<DIMS>>,
     verts: VertexBuffer,
     indices: IndexBuffer,
     shader: Shader,
@@ -69,7 +69,7 @@ impl App for HisNameGort {
             Primitive::Lines,
         )?;
 
-        let original_verts = n_cube_vertices(1.).collect::<Vec<Vector<DIMS>>>();
+        let original_verts = n_cube_vertices_color(1.).collect::<Vec<_>>();
         let indices = n_cube_line_indices(DIMS as _).collect::<Vec<u32>>();
 
         //let matrix = make_projection(&[0.3, 1.4, 2.3, 9.0, 1.4, 3.2], 3);
@@ -113,8 +113,30 @@ impl App for HisNameGort {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+struct VertexN<const D: usize> {
+    pos: Vector<D>,
+    color: Vector<3>,
+}
+
+impl Into<Vertex> for VertexN<3> {
+    fn into(self) -> Vertex {
+        let VertexN { pos, color } = self;
+        Vertex { pos, color }
+    }
+}
+
+impl<const D: usize> VertexN<D> {
+    fn map_pos<const U: usize>(self, f: impl FnOnce(Vector<D>) -> Vector<U>) -> VertexN<U> {
+        VertexN {
+            pos: f(self.pos),
+            color: self.color,
+        }
+    }
+}
+
 fn convert_verts<const D: usize>(
-    original: &[Vector<D>],
+    original: &[VertexN<D>],
     anim: f32,
     matrix: &DynSparseMatrix,
 ) -> Vec<Vertex> {
@@ -123,16 +145,16 @@ fn convert_verts<const D: usize>(
         .iter()
         .copied()
         //.map(|v| n_rotate((0, 1), anim, v))
-        .map(|v| n_rotate((0, 1), anim * 2., v))
-        .map(|v| n_rotate((1, 2), 3., v))
-        .map(|v| n_rotate((2, 3), anim, v))
-        .map(|v| n_rotate((3, 4), 0.2, v))
-        .map(|v| n_rotate((4, 5), anim * 3., v))
+        .map(|v| v.map_pos(|v| n_rotate((0, 1), anim * 2., v)))
+        .map(|v| v.map_pos(|v| n_rotate((1, 2), 3., v)))
+        .map(|v| v.map_pos(|v| n_rotate((2, 3), anim, v)))
+        .map(|v| v.map_pos(|v| n_rotate((3, 4), 0.2, v)))
+        .map(|v| v.map_pos(|v| n_rotate((4, 5), anim * 3., v)))
         //.map(|v| n_rotate((1, 3), 2.5, v))
         //.map(|v| n_rotate((1, 2), anim / 3., v))
         //.map(|pos| project_3d(pos))
-        .map(|pos| project_nd(pos, matrix))
-        .map(|pos| Vertex { pos, color })
+        .map(|v| v.map_pos(|pos| project_nd(pos, matrix)))
+        .map(|v| v.into())
         .collect()
 }
 
@@ -147,6 +169,16 @@ where
 }
 
 type Vector<const D: usize> = [f32; D];
+
+fn n_cube_vertices_color<const D: usize>(scale: f32) -> impl Iterator<Item = VertexN<D>> {
+    let rank = D as u32;
+    let pos_dim = move |i: u32, dim: u32| if i & 1 << dim == 0 { scale } else { -scale };
+    let color_dim = move |i: u32, dim: u32| if i & 1 << dim == 0 { 1. } else { 0. };
+    (0..1u32 << rank).map(move |i| VertexN {
+        pos: collect_array((0..rank).map(|dim| pos_dim(i, dim))),
+        color: collect_array((0..3).map(|dim| color_dim(i, dim))),
+    })
+}
 
 fn n_cube_vertices<const D: usize>(scale: f32) -> impl Iterator<Item = Vector<D>> {
     let rank = D as u32;
