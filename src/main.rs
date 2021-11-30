@@ -18,7 +18,7 @@ fn make_projection(coeffs: &[f32], proj: usize) -> DynSparseMatrix {
         for col in 0..row + 1 {
             let mut entry = 1.;
             for (dim, &coeff) in (0..row).zip(coeffs) {
-                if col > dim + 1 { 
+                if col > dim + 1 {
                     continue;
                 }
                 entry *= &match (col <= dim, row == dim + 1) {
@@ -34,7 +34,13 @@ fn make_projection(coeffs: &[f32], proj: usize) -> DynSparseMatrix {
     rows
 }
 
-fn project<const D: usize>(v: Vector<D>, matrix: &DynSparseMatrix) -> Vector<3> {
+fn project_3d<const D: usize>(v: Vector<D>) -> Vector<3> {
+    let mut out_vect3 = [0.0; 3];
+    out_vect3.copy_from_slice(&v[..3]);
+    out_vect3
+}
+
+fn project_nd<const D: usize>(v: Vector<D>, matrix: &DynSparseMatrix) -> Vector<3> {
     let mut out_vect3 = [0.0; 3];
 
     for (out, mat) in out_vect3.iter_mut().zip(matrix) {
@@ -44,8 +50,7 @@ fn project<const D: usize>(v: Vector<D>, matrix: &DynSparseMatrix) -> Vector<3> 
     out_vect3
 }
 
-
-const DIMS: usize = 8;
+const DIMS: usize = 6;
 
 struct HisNameGort {
     original_verts: Vec<Vector<DIMS>>,
@@ -68,7 +73,7 @@ impl App for HisNameGort {
         let indices = n_cube_line_indices(DIMS as _).collect::<Vec<u32>>();
 
         //let matrix = make_projection(&[0.3, 1.4, 2.3, 9.0, 1.4, 3.2], 3);
-        let matrix = make_projection(&[1.; DIMS], 3);
+        let matrix = make_projection(&[2.; DIMS], 3);
         let verts = convert_verts(&original_verts, 0., &matrix);
 
         Ok(Self {
@@ -108,18 +113,25 @@ impl App for HisNameGort {
     }
 }
 
-fn convert_verts<const D: usize>(original: &[Vector<D>], anim: f32, matrix: &DynSparseMatrix) -> Vec<Vertex> {
+fn convert_verts<const D: usize>(
+    original: &[Vector<D>],
+    anim: f32,
+    matrix: &DynSparseMatrix,
+) -> Vec<Vertex> {
     let color = [1.; 3];
     original
         .iter()
         .copied()
         //.map(|v| n_rotate((0, 1), anim, v))
-        .map(|v| n_rotate((3, 1), anim * 2., v))
-        .map(|v| n_rotate((4, 2), anim * 3., v))
-        .map(|v| n_rotate((6, 3), anim * 2.5, v))
+        .map(|v| n_rotate((0, 1), anim * 2., v))
+        .map(|v| n_rotate((1, 2), 3., v))
+        .map(|v| n_rotate((2, 3), anim, v))
+        .map(|v| n_rotate((3, 4), 0.2, v))
+        .map(|v| n_rotate((4, 5), anim * 3., v))
         //.map(|v| n_rotate((1, 3), 2.5, v))
         //.map(|v| n_rotate((1, 2), anim / 3., v))
-        .map(|pos| project(pos, matrix))
+        //.map(|pos| project_3d(pos))
+        .map(|pos| project_nd(pos, matrix))
         .map(|pos| Vertex { pos, color })
         .collect()
 }
@@ -136,9 +148,7 @@ where
 
 type Vector<const D: usize> = [f32; D];
 
-fn n_cube_vertices<const D: usize>(
-    scale: f32,
-) -> impl Iterator<Item = Vector<D>> {
+fn n_cube_vertices<const D: usize>(scale: f32) -> impl Iterator<Item = Vector<D>> {
     let rank = D as u32;
     let f = move |i: u32, dim: u32| if i & 1 << dim == 0 { scale } else { -scale };
     (0..1u32 << rank).map(move |i| collect_array((0..rank).map(|dim| f(i, dim))))
@@ -165,4 +175,3 @@ fn n_rotate<const D: usize>(axis: (usize, usize), angle: f32, mut v: Vector<D>) 
     v[b] = va * angle.sin() + vb * angle.cos();
     v
 }
-
